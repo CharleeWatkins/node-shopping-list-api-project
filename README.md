@@ -203,5 +203,4 @@ This approach is suitable for learning and testing a REST API. However, the data
 A database could be added in the future to provide persistent storage.
 
 ## License
-
 This project is licensed under the MIT License.
