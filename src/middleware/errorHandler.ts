@@ -1,26 +1,6 @@
-import { Request, Response, NextFunction } from "express";
+import { ServerResponse } from "node:http";
 
-export class AppError extends Error {
-  constructor(public statusCode: number, message: string) {
-    super(message);
-    this.name = "AppError";
-  }
-}
-
-export function errorHandler(
-  err: any,
-  _req: Request,
-  res: Response,
-  _next: NextFunction
-) {
-  
-  const status = err instanceof AppError ? err.statusCode : 500;
-  const message = err.message || "Internal Server Error";
-
-  console.log("Error caught by handler:", message); 
-
-  res.status(status).json({
-    success: false,
-    error: message,
-  });
+export function sendError(res: ServerResponse,  statusCode: number, message: string): void {
+  res.writeHead(statusCode, { "Content-Type": "application/json" });
+  res.end(JSON.stringify({success: false, error: message }));
 }

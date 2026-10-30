@@ -1,132 +1,97 @@
-import { Router, Request, Response, NextFunction } from "express";
+import { IncomingMessage, ServerResponse } from "node:http";
 import { items, generateId } from "../data/store";
 import { Item } from "../models/item";
-import { AppError } from "../middleware/errorHandler";
+import { sendError } from "../middleware/errorHandler";
 
-const router = Router();
+export async function handleItemRoutes(req: IncomingMessage, res: ServerResponse) {
+  const method = req.method;
+  const url = req.url || "";
+  
+  // Route matching (replaces Express router)
+  const match = url.match(/^\/items\/(\d+)$/);
+  const id = match ? Number(match[1]) : null;
 
-// GET /items - Return all items
-router.get("/", (_req: Request, res: Response) => {
-  res.json({ success: true, data: items });
-});
-
-// POST /items - Create a new item (ADD async HERE)
-router.post("/", async (req: Request, res: Response) => {
-  // Safety net
-  if (!req.body) {
-    throw new AppError(400, "Request body is missing or invalid JSON"); // Use throw
+  // 1. GET /items
+  if (url === "/items" && method === "GET") {
+    res.writeHead(200, { "Content-Type": "application/json" });
+    return res.end(JSON.stringify({ success: true, data: items }));
   }
 
-  const { name, quantity, purchased } = req.body;
+  // 2. POST /items
+  if (url === "/items" && method === "POST") {
+    let body = "";
+    // In raw Node, you have to manually grab the body data chunk by chunk
+   req.on("data", (chunk: any) => { body += chunk.toString(); });
+    req.on("end", () => {
+      try {
+        if (!body) throw new Error("Request body is missing");
+        const { name, quantity, purchased } = JSON.parse(body);
 
-  // Validation: name is required
-  if (!name || typeof name !== "string" || name.trim() === "") {
-    return res.status(400).json({
-      success: false,
-      error: "Field 'name' is required and must be a non-empty string",
+        if (!name || typeof name !== "string") {
+          return sendError(res, 400, "Field 'name' is required");
+        }
+
+        const newItem: Item = {
+          id: generateId(),
+          name: name.trim(),
+          quantity: quantity ?? 1,
+          purchased: purchased ?? false,
+          createdAt: new Date().toISOString(),
+        };
+
+        items.push(newItem);
+        res.writeHead(201, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ success: true, data: newItem }));
+      } catch (err: any) {
+        sendError(res, 400, err.message || "Invalid JSON");
+      }
     });
+    return;
   }
 
-  // Validation: quantity must be a positive number if provided
-  if (quantity !== undefined && (typeof quantity !== "number" || quantity <= 0)) {
-    return res.status(400).json({
-      success: false,
-      error: "Field 'quantity' must be a positive number",
+  // 3. GET /items/:id
+  if (id !== null && method === "GET") {
+    const item = items.find((i) => i.id === id);
+    if (!item) return sendError(res, 404, "Item not found");
+    
+    res.writeHead(200, { "Content-Type": "application/json" });
+    return res.end(JSON.stringify({ success: true, data: item }));
+  }
+
+  // 4. PUT /items/:id
+  if (id !== null && method === "PUT") {
+    const itemIndex = items.findIndex((i) => i.id === id);
+    if (itemIndex === -1) return sendError(res, 404, "Item not found");
+
+    let body = "";
+    req.on("data", (chunk) => { body += chunk.toString(); });
+    req.on("end", () => {
+      try {
+        const { name, quantity, purchased } = JSON.parse(body);
+        
+        if (name !== undefined) items[itemIndex].name = name;
+        if (quantity !== undefined) items[itemIndex].quantity = quantity;
+        if (purchased !== undefined) items[itemIndex].purchased = purchased;
+
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ success: true, data: items[itemIndex] }));
+      } catch (err) {
+        sendError(res, 400, "Invalid JSON");
+      }
     });
+    return;
   }
 
-  // Create the item
-  const newItem: Item = {
-    id: generateId(),
-    name: name.trim(),
-    quantity: quantity ?? 1,
-    purchased: purchased ?? false,
-    createdAt: new Date().toISOString(),
-  };
+  // 5. DELETE /items/:id
+  if (id !== null && method === "DELETE") {
+    const index = items.findIndex((i) => i.id === id);
+    if (index === -1) return sendError(res, 404, "Item not found");
 
-  items.push(newItem);
-  res.status(201).json({ success: true, data: newItem });
-});
-
-// GET /items/:id - Get a single item by ID
-router.get("/:id", (req: Request, res: Response) => {
-  const id = Number(req.params.id);
-
-  if (isNaN(id)) {
-    return res.status(400).json({ success: false, error: "Invalid item ID" });
+    items.splice(index, 1);
+    res.writeHead(204); // 204 No Content
+    return res.end();
   }
 
-  const item = items.find((i) => i.id === id);
-
-  if (!item) {
-    return res.status(404).json({ success: false, error: "Item not found" });
-  }
-
-  res.json({ success: true, data: item });
-});
-
-// PUT /items/:id - Update an existing item (ADD async HERE)
-router.put("/:id", async (req: Request, res: Response) => {
-  const id = Number(req.params.id);
-
-  if (isNaN(id)) {
-    return res.status(400).json({ success: false, error: "Invalid item ID" });
-  }
-
-  const item = items.find((i) => i.id === id);
-  if (!item) {
-    return res.status(404).json({ success: false, error: "Item not found" });
-  }
-
-  // Safety net
-  if (!req.body) {
-    throw new AppError(400, "Request body is missing or invalid JSON"); // Use throw
-  }
-
-  const { name, quantity, purchased } = req.body;
-
-  if (name !== undefined && (typeof name !== "string" || name.trim() === "")) {
-    return res.status(400).json({
-      success: false,
-      error: "Field 'name' must be a non-empty string",
-    });
-  }
-  if (quantity !== undefined && (typeof quantity !== "number" || quantity <= 0)) {
-    return res.status(400).json({
-      success: false,
-      error: "Field 'quantity' must be a positive number",
-    });
-  }
-  if (purchased !== undefined && typeof purchased !== "boolean") {
-    return res.status(400).json({
-      success: false,
-      error: "Field 'purchased' must be a boolean",
-    });
-  }
-
-  if (name !== undefined) item.name = name.trim();
-  if (quantity !== undefined) item.quantity = quantity;
-  if (purchased !== undefined) item.purchased = purchased;
-
-  res.json({ success: true, data: item });
-});
-
-// DELETE /items/:id - Remove an item
-router.delete("/:id", (req: Request, res: Response) => {
-  const id = Number(req.params.id);
-
-  if (isNaN(id)) {
-    return res.status(400).json({ success: false, error: "Invalid item ID" });
-  }
-
-  const index = items.findIndex((i) => i.id === id);
-
-  if (index === -1) {
-    return res.status(404).json({ success: false, error: "Item not found" });
-  }
-
-  items.splice(index, 1);
-  res.status(204).send();
-});
-
-export default router;
+  // 6. 404 Fallback for unmatched routes
+  sendError(res, 404, "Route not found");
+}
