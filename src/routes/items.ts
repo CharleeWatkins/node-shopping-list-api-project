@@ -7,20 +7,20 @@ export async function handleItemRoutes(req: IncomingMessage, res: ServerResponse
   const method = req.method;
   const url = req.url || "";
   
-  // Route matching (replaces Express router)
+  
   const match = url.match(/^\/items\/(\d+)$/);
   const id = match ? Number(match[1]) : null;
 
-  // 1. GET /items
+
   if (url === "/items" && method === "GET") {
     res.writeHead(200, { "Content-Type": "application/json" });
     return res.end(JSON.stringify({ success: true, data: items }));
   }
 
-  // 2. POST /items
+
   if (url === "/items" && method === "POST") {
     let body = "";
-    // In raw Node, you have to manually grab the body data chunk by chunk
+ 
    req.on("data", (chunk: any) => { body += chunk.toString(); });
     req.on("end", () => {
       try {
@@ -49,7 +49,7 @@ export async function handleItemRoutes(req: IncomingMessage, res: ServerResponse
     return;
   }
 
-  // 3. GET /items/:id
+ 
   if (id !== null && method === "GET") {
     const item = items.find((i) => i.id === id);
     if (!item) return sendError(res, 404, "Item not found");
@@ -58,7 +58,7 @@ export async function handleItemRoutes(req: IncomingMessage, res: ServerResponse
     return res.end(JSON.stringify({ success: true, data: item }));
   }
 
-  // 4. PUT /items/:id
+ 
   if (id !== null && method === "PUT") {
     const itemIndex = items.findIndex((i) => i.id === id);
     if (itemIndex === -1) return sendError(res, 404, "Item not found");
@@ -82,16 +82,16 @@ export async function handleItemRoutes(req: IncomingMessage, res: ServerResponse
     return;
   }
 
-  // 5. DELETE /items/:id
+
   if (id !== null && method === "DELETE") {
     const index = items.findIndex((i) => i.id === id);
     if (index === -1) return sendError(res, 404, "Item not found");
 
     items.splice(index, 1);
-    res.writeHead(204); // 204 No Content
+    res.writeHead(204); 
     return res.end();
   }
 
-  // 6. 404 Fallback for unmatched routes
+  
   sendError(res, 404, "Route not found");
 }
